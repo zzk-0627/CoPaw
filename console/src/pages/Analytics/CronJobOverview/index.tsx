@@ -52,6 +52,8 @@ import {
   type BranchSkillManagerItem,
   type BranchSkillManagerCustomerItem,
   type CronBranchTaskRankingItem,
+  type CronSkillRankingItem,
+  type CronSkillBranchRankingItem,
 } from "../../../api/modules/monitor";
 import { BBK_ID_TO_NAME_MAP } from "../../../constants/bbk";
 import {
@@ -443,6 +445,75 @@ function TaskRankingTable({
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SkillRankingTable({
+  data,
+  loading,
+  selectedSkill,
+  onRowClick,
+}: {
+  data: CronSkillRankingItem[];
+  loading: boolean;
+  selectedSkill: string | null;
+  onRowClick: (skillName: string) => void;
+}) {
+  return (
+    <section className={`${styles.panel} ${styles.behaviorPanel}`}>
+      {loading ? (
+        renderPanelLoading()
+      ) : (
+        <div className={styles.tableScroller}>
+          <table className={styles.behaviorTable}>
+            <thead>
+              <tr>
+                <th className={styles.indexCell} />
+                <th>技能名称</th>
+                <th>涉及分行数</th>
+                <th>定时任务数</th>
+                <th>成功执行数</th>
+                <th>成功执行率</th>
+                <th>覆盖客户经理数</th>
+                <th>查看结果的客户经理数</th>
+                <th>客户经理查看结果率</th>
+                <th>已读任务数</th>
+                <th>推荐客户数</th>
+                <th>查看客户数</th>
+                <th>接触客户数</th>
+                <th>接触客户率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, index) => (
+                <tr
+                  key={row.skill_name}
+                  className={`${styles.clickableRow} ${
+                    selectedSkill === row.skill_name ? styles.selectedRow : ""
+                  }`}
+                  onClick={() => onRowClick(row.skill_name)}
+                >
+                  <td className={styles.indexCell}>{index + 1}</td>
+                  <td className={styles.branchNameLink}>{row.skill_name}</td>
+                  <td>{row.branch_count}</td>
+                  <td>{row.total_tasks ?? 0}</td>
+                  <td>{row.success_count ?? 0}</td>
+                  <td>{(row.success_rate ?? 0).toFixed(1)}%</td>
+                  <td>{row.manager_count}</td>
+                  <td>{row.result_view_manager_count}</td>
+                  <td>{(row.result_view_manager_rate ?? 0).toFixed(1)}%</td>
+                  <td>{row.read_tasks}</td>
+                  <td>{row.recommended_customers}</td>
+                  <td>{row.viewed_customers}</td>
+                  <td>{row.contacted_customers}</td>
+                  <td>{(row.contact_rate * 100).toFixed(1)}%</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -1097,6 +1168,25 @@ export default function CronJobOverviewPage() {
   >([]);
   const [taskCustomersLoading, setTaskCustomersLoading] = useState(false);
 
+  const [skillRankingRows, setSkillRankingRows] = useState<
+    CronSkillRankingItem[]
+  >([]);
+  const [skillRankingLoading, setSkillRankingLoading] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [skillBranchRows, setSkillBranchRows] = useState<
+    CronSkillBranchRankingItem[]
+  >([]);
+  const [skillBranchLoading, setSkillBranchLoading] = useState(false);
+  const [selectedSkillBranch, setSelectedSkillBranch] = useState<{
+    bbk_id: string;
+    bbk_name: string;
+  } | null>(null);
+  const [skillBranchManagers, setSkillBranchManagers] = useState<
+    BranchSkillManagerItem[]
+  >([]);
+  const [skillBranchManagersLoading, setSkillBranchManagersLoading] =
+    useState(false);
+
   // Skill view state (current ranking table with manager drill-down)
   // Inline drill-down state for branch ranking expansion
   const [selectedBranch, setSelectedBranch] = useState<{
@@ -1238,6 +1328,20 @@ export default function CronJobOverviewPage() {
     }
   };
 
+  const fetchSkillRankingData = async () => {
+    setSkillRankingLoading(true);
+    try {
+      const response = await monitorApi.getCronSkillRanking(
+        getOverviewFilters(),
+      );
+      setSkillRankingRows(response.items);
+    } catch (error) {
+      console.warn("Failed to fetch cron skill ranking.", error);
+    } finally {
+      setSkillRankingLoading(false);
+    }
+  };
+
   // ===== Task view functions =====
 
   const handleSelectTaskBranch = async (bbkId: string, bbkName: string) => {
@@ -1327,6 +1431,58 @@ export default function CronJobOverviewPage() {
       console.warn("Failed to fetch task customers.", error);
     } finally {
       setTaskCustomersLoading(false);
+    }
+  };
+
+  const handleSelectSkill = async (skillName: string) => {
+    if (selectedSkill === skillName) {
+      setSelectedSkill(null);
+      setSkillBranchRows([]);
+      setSelectedSkillBranch(null);
+      setSkillBranchManagers([]);
+      return;
+    }
+
+    setSelectedSkill(skillName);
+    setSelectedSkillBranch(null);
+    setSkillBranchManagers([]);
+    setSkillBranchLoading(true);
+    try {
+      const response = await monitorApi.getCronSkillBranchRanking({
+        skill_name: skillName,
+        ...getOverviewFilters(),
+      });
+      setSkillBranchRows(response.items);
+    } catch (error) {
+      console.warn("Failed to fetch skill branch ranking.", error);
+    } finally {
+      setSkillBranchLoading(false);
+    }
+  };
+
+  const handleSelectSkillBranch = async (
+    bbkId: string,
+    bbkName: string,
+  ) => {
+    if (selectedSkillBranch?.bbk_id === bbkId) {
+      setSelectedSkillBranch(null);
+      setSkillBranchManagers([]);
+      return;
+    }
+
+    setSelectedSkillBranch({ bbk_id: bbkId, bbk_name: bbkName });
+    setSkillBranchManagersLoading(true);
+    try {
+      const response = await monitorApi.getBranchSkillManagers({
+        bbk_id: bbkId,
+        skill_name: selectedSkill!,
+        ...getDrawerDateParams(),
+      });
+      setSkillBranchManagers(response.items);
+    } catch (error) {
+      console.warn("Failed to fetch skill branch managers.", error);
+    } finally {
+      setSkillBranchManagersLoading(false);
     }
   };
 
@@ -1426,7 +1582,11 @@ export default function CronJobOverviewPage() {
     setSelectedTaskManager(null);
 
     const fetchAllData = async () => {
-      await Promise.all([fetchOverviewData(), fetchTaskBranchRankingData()]);
+      await Promise.all([
+        fetchOverviewData(),
+        fetchTaskBranchRankingData(),
+        fetchSkillRankingData(),
+      ]);
     };
 
     fetchAllData();
@@ -1455,7 +1615,11 @@ export default function CronJobOverviewPage() {
     setSelectedTaskSkill(null);
     setSelectedTaskManager(null);
 
-    await Promise.all([fetchOverviewData(), fetchTaskBranchRankingData()]);
+    await Promise.all([
+      fetchOverviewData(),
+      fetchTaskBranchRankingData(),
+      fetchSkillRankingData(),
+    ]);
   };
 
   const handleBranchExport = async () => {
@@ -2072,6 +2236,144 @@ export default function CronJobOverviewPage() {
               ]}
             />
           </div>
+        </div>
+      )}
+
+      <h2 className={styles.sectionHeading}>
+        技能综合排行
+        <span className={styles.sectionHeadingHint}>
+          （仅统计技能相关定时任务，点击技能查看分行）
+        </span>
+      </h2>
+      <SkillRankingTable
+        data={skillRankingRows}
+        loading={skillRankingLoading}
+        selectedSkill={selectedSkill}
+        onRowClick={handleSelectSkill}
+      />
+      {selectedSkill && (
+        <div className={styles.drillDownContainer}>
+          <div className={styles.drillDownFullWidth}>
+            <h3 className={styles.drillDownTitle}>
+              技能相关分行明细
+              <span className={styles.drillDownSubTitle}>
+                （{selectedSkill}）
+              </span>
+            </h3>
+            <Table
+              className={styles.drillDownTable}
+              dataSource={skillBranchRows}
+              rowKey="bbk_id"
+              loading={skillBranchLoading}
+              size="small"
+              pagination={false}
+              sticky
+              scroll={DRILL_DOWN_TABLE_SCROLL}
+              onRow={(record) => ({
+                onClick: () =>
+                  handleSelectSkillBranch(record.bbk_id, record.bbk_name),
+                style: {
+                  cursor: "pointer",
+                  background:
+                    record.bbk_id === selectedSkillBranch?.bbk_id
+                      ? "#e6f4ff"
+                      : undefined,
+                },
+              })}
+              columns={[
+                {
+                  title: "分行名称",
+                  dataIndex: "bbk_name",
+                  key: "bbk_name",
+                },
+                {
+                  title: "覆盖客户经理数",
+                  dataIndex: "manager_count",
+                  key: "manager_count",
+                },
+                {
+                  title: "定时任务数",
+                  dataIndex: "total_tasks",
+                  key: "total_tasks",
+                },
+                {
+                  title: "成功执行数",
+                  dataIndex: "success_count",
+                  key: "success_count",
+                },
+                {
+                  title: "成功执行率",
+                  dataIndex: "success_rate",
+                  key: "success_rate",
+                  render: (value?: number) =>
+                    `${(value ?? 0).toFixed(1)}%`,
+                },
+              ]}
+            />
+          </div>
+          {selectedSkillBranch && (
+            <div className={styles.drillDownFullWidth}>
+              <h3 className={styles.drillDownTitle}>
+                技能相关客户经理明细
+                <span className={styles.drillDownSubTitle}>
+                  （{selectedSkillBranch.bbk_name}）
+                </span>
+              </h3>
+              <Table
+                className={styles.drillDownTable}
+                dataSource={skillBranchManagers}
+                rowKey="user_id"
+                loading={skillBranchManagersLoading}
+                size="small"
+                pagination={false}
+                sticky
+                scroll={DRILL_DOWN_TABLE_SCROLL}
+              columns={[
+                {
+                  title: "客户经理",
+                  dataIndex: "user_name",
+                  key: "user_name",
+                },
+                {
+                  title: "定时任务数",
+                  dataIndex: "total_tasks",
+                  key: "total_tasks",
+                },
+                {
+                  title: "成功执行数",
+                  dataIndex: "success_count",
+                  key: "success_count",
+                },
+                {
+                  title: "成功率",
+                  dataIndex: "success_rate",
+                  key: "success_rate",
+                  render: (value?: number) => `${(value ?? 0).toFixed(1)}%`,
+                },
+                {
+                  title: "已读次数",
+                  dataIndex: "read_count",
+                  key: "read_count",
+                  },
+                  {
+                    title: "方案次数",
+                    dataIndex: "plan_count",
+                    key: "plan_count",
+                  },
+                  {
+                    title: "洞察次数",
+                    dataIndex: "insight_count",
+                    key: "insight_count",
+                  },
+                  {
+                    title: "电访次数",
+                    dataIndex: "phone_count",
+                    key: "phone_count",
+                  },
+                ]}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -505,6 +505,49 @@ export interface CronBranchTaskRankingResponse {
   items: CronBranchTaskRankingItem[];
 }
 
+export interface CronSkillRankingItem {
+  skill_name: string;
+  branch_count: number;
+  total_tasks: number;
+  success_count: number;
+  success_rate: number;
+  manager_count: number;
+  result_view_manager_count: number;
+  result_view_manager_rate: number;
+  plan_manager_count: number;
+  plan_manager_rate: number;
+  insight_manager_count: number;
+  insight_manager_rate: number;
+  phone_manager_count: number;
+  phone_manager_rate: number;
+  read_tasks: number;
+  recommended_customers: number;
+  viewed_customers: number;
+  viewed_customer_rate: number;
+  contacted_customers: number;
+  contact_rate: number;
+  insight_customers: number;
+  phone_customers: number;
+}
+
+export interface CronSkillRankingResponse {
+  start_date: string;
+  end_date: string;
+  items: CronSkillRankingItem[];
+}
+
+export interface CronSkillBranchRankingResponse {
+  start_date: string;
+  end_date: string;
+  skill_name: string;
+  items: CronSkillBranchRankingItem[];
+}
+
+export interface CronSkillBranchRankingItem extends CronSkillRankingItem {
+  bbk_id: string;
+  bbk_name: string;
+}
+
 export interface CronJobOverviewFailureReason {
   name: string;
   count: number;
@@ -692,6 +735,9 @@ export interface ManagerCustomerResponse {
 export interface BranchSkillManagerItem {
   user_id: string;
   user_name: string;
+  total_tasks?: number;
+  success_count?: number;
+  success_rate?: number;
   read_count: number;
   plan_count: number;
   insight_count: number;
@@ -1037,6 +1083,21 @@ export const monitorApi = {
     filters?: CronJobOverviewDateFilters,
   ): Promise<CronBranchTaskRankingResponse> => {
     return request(`/monitor/cron/branch-task-behavior${buildQuery(filters)}`);
+  },
+
+  getCronSkillRanking: async (
+    filters?: CronJobOverviewDateFilters,
+  ): Promise<CronSkillRankingResponse> => {
+    return request(`/monitor/cron/skill-ranking${buildQuery(filters)}`);
+  },
+
+  getCronSkillBranchRanking: async (params: {
+    skill_name: string;
+    start_date?: string;
+    end_date?: string;
+    bbk_ids?: string;
+  }): Promise<CronSkillBranchRankingResponse> => {
+    return request(`/monitor/cron/skill-branch-ranking${buildQuery(params)}`);
   },
 
   getCronBranchError: async (

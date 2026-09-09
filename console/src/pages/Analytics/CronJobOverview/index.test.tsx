@@ -15,8 +15,10 @@ const monitorApiMock = vi.hoisted(() => ({
   getCronOverviewStats: vi.fn(),
   getCronBranchRanking: vi.fn(),
   getCronBranchError: vi.fn(),
-  getCronBranchTaskBehavior: vi.fn(),
-  getBranchSkills: vi.fn(),
+    getCronBranchTaskBehavior: vi.fn(),
+    getCronSkillRanking: vi.fn(),
+    getCronSkillBranchRanking: vi.fn(),
+    getBranchSkills: vi.fn(),
   getBranchSkillManagers: vi.fn(),
   getBranchSkillManagerCustomers: vi.fn(),
   getBranchManagerSummary: vi.fn(),
@@ -127,6 +129,17 @@ describe("CronJobOverview summary cards", () => {
       end_date: "2026-06-30",
       items: [],
     });
+    monitorApiMock.getCronSkillRanking.mockResolvedValue({
+      start_date: "2026-06-30",
+      end_date: "2026-06-30",
+      items: [],
+    });
+    monitorApiMock.getCronSkillBranchRanking.mockResolvedValue({
+      start_date: "2026-06-30",
+      end_date: "2026-06-30",
+      skill_name: "skill",
+      items: [],
+    });
     monitorApiMock.getBranchSkills.mockResolvedValue({
       start_date: "2026-06-30",
       end_date: "2026-06-30",
@@ -212,6 +225,108 @@ describe("CronJobOverview summary cards", () => {
     expect(screen.getByText("221")).toBeInTheDocument();
     expect(screen.getByLabelText("概览指标").className).toContain(
       styles.summaryGrid,
+    );
+  });
+
+  it("renders skill overview separately and drills from skill to branch to manager", async () => {
+    monitorApiMock.getCronSkillRanking.mockResolvedValueOnce({
+      start_date: "2026-06-30",
+      end_date: "2026-06-30",
+      items: [
+        {
+          skill_name: "保险营销",
+          branch_count: 2,
+          total_tasks: 8,
+          success_count: 7,
+          success_rate: 87.5,
+          manager_count: 3,
+          result_view_manager_count: 2,
+          read_tasks: 5,
+          recommended_customers: 10,
+          viewed_customers: 4,
+          contacted_customers: 3,
+          contact_rate: 0.75,
+          insight_customers: 2,
+          phone_customers: 1,
+        },
+      ],
+    });
+    monitorApiMock.getCronSkillBranchRanking.mockResolvedValueOnce({
+      start_date: "2026-06-30",
+      end_date: "2026-06-30",
+      skill_name: "保险营销",
+      items: [
+        {
+          bbk_id: "100",
+          bbk_name: "测试分行",
+          manager_count: 2,
+          total_tasks: 5,
+          success_count: 4,
+          success_rate: 80,
+          read_tasks: 3,
+          recommended_customers: 6,
+          viewed_customers: 2,
+          contacted_customers: 1,
+          contact_rate: 0.5,
+          insight_customers: 1,
+          phone_customers: 1,
+        },
+      ],
+    });
+    monitorApiMock.getBranchSkillManagers.mockResolvedValueOnce({
+      start_date: "2026-06-30",
+      end_date: "2026-06-30",
+      bbk_id: "100",
+      skill_name: "保险营销",
+      items: [
+        {
+          user_id: "u1",
+          user_name: "张三",
+          read_count: 2,
+          plan_count: 1,
+          insight_count: 1,
+          phone_count: 0,
+          last_click_time: null,
+        },
+      ],
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/analytics/cron-job-overview"]}>
+        <Routes>
+          <Route
+            path="/analytics/cron-job-overview"
+            element={<CronJobOverviewPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("技能综合排行")).toBeInTheDocument();
+    expect(screen.getByText("保险营销")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("保险营销"));
+
+    expect(
+      await screen.findByText("技能相关分行明细"),
+    ).toBeInTheDocument();
+    expect(monitorApiMock.getCronSkillBranchRanking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skill_name: "保险营销",
+      }),
+    );
+    fireEvent.click(screen.getByText("测试分行"));
+
+    expect(
+      await screen.findByText("技能相关客户经理明细"),
+    ).toBeInTheDocument();
+    expect(monitorApiMock.getBranchSkillManagers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bbk_id: "100",
+        skill_name: "保险营销",
+      }),
+    );
+    expect(container.querySelectorAll(`.${styles.behaviorTable}`).length).toBe(
+      3,
     );
   });
 
@@ -897,9 +1012,9 @@ describe("CronJobOverview summary cards", () => {
       screen.getByRole("button", { name: "任务总数排序" }),
     ).toBeInTheDocument();
 
-    const branchDimensionTable = container.querySelectorAll(
-      `.${styles.behaviorTable}`,
-    )[1];
+    const branchDimensionTable = container.querySelector(
+      `.${styles.branchDimensionTable}`,
+    );
     const branchNames = () =>
       Array.from(branchDimensionTable?.querySelectorAll("tbody tr") ?? []).map(
         (row) => row.children[1]?.textContent,
